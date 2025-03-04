@@ -1,8 +1,8 @@
-*Purpose*
+# *Purpose*
 
 This is an automated reconnaissance script designed for cybersecurity professionals and bug bounty hunters to quickly gather information about a target domain. It automates several reconnaissance and vulnerability scanning techniques.
 
-*Tools Used:*
+# *Tools Used:*
 
 *Subfinder: Subdomain enumeration tool*
 
