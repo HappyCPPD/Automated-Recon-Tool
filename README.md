@@ -49,7 +49,18 @@ Useful for various injection tests
 Discovers subdomains using multiple sources
 More comprehensive than standard tools
 
+# **Steps**
 
+XSS (Cross-Site Scripting) Scan
+SQLi (SQL Injection) Scan
+SSRF (Server-Side Request Forgery) Scan
+LFI (Local File Inclusion) Scan
+Open Redirect Scan
+CORS (Cross-Origin Resource Sharing) Scan
+JavaScript File Extraction
+URL Comments Extraction
+Live Hosts Discovery
+Website Screenshots **(Does not currently work)**
 
 # **How to Use the Script**
 *Prerequisites*
