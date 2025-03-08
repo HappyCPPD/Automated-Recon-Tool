@@ -58,7 +58,7 @@ URL Comments Extraction
 
 Live Hosts Discovery
 
-Website Screenshots **(Does not currently work)**
+Website Screenshots 
 
 # **How to Use the Script**
 *Prerequisites*
