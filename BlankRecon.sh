@@ -1,235 +1,468 @@
 #!/bin/bash
 
 PURPLE='\033[0;35m'
+BLUE='\033[0;34m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
-NC='\033[0m'
+CYAN='\033[0;36m'
+NC='\033[0m' 
+
 TARGET_DIR=""
+TARGET=""
+START_TIME=$(date +%s)
 
 display_title() {
     echo -e "${PURPLE}"
-    cat << "EOF"
-  ____  *             *      _____                      
- |  * \| |           | |    |  *_ \                    
- | |_) | | ** ***** *** | | ** | |**) |___  ___ ___  * *_  
- |  * <| |/ *` | '_ \| |/ / |  *  // * \/ __/ * \| '* \
+    cat << "EOF" 
+
+  ____  _             _      _____                      
+ |  _ \| |           | |    |  __ \                     
+ | |_) | | __ _ _ __ | | __ | |__) |___  ___ ___  _ __  
+ |  _ <| |/ _` | '_ \| |/ / |  _  // _ \/ __/ _ \| '_ \ 
  | |_) | | (_| | | | |   <  | | \ \  __/ (_| (_) | | | |
  |____/|_|\__,_|_| |_|_|\_\ |_|  \_\___|\___\___/|_| |_|
+                                                        
+                                                                            
 EOF
     echo -e "${NC}"
+    echo -e "${YELLOW}=== Comprehensive Reconnaissance & Vulnerability Scanner ===${NC}"
+    echo -e "${BLUE}Made by: HappyCPPD ${NC}"
+    echo
 }
 
-install_go_tool() {
-    local tool_name=$1
-    local repo_path=$2
-    echo -e "${YELLOW}[*] Installing $tool_name...${NC}"
-    if ! command -v "$tool_name" &> /dev/null; then
-        if go install "$repo_path"@latest 2>/dev/null; then
-            echo -e "${GREEN}[+] $tool_name installed successfully.${NC}"
-        else
-            echo -e "${RED}[!] ERROR: Failed to install $tool_name. Please install manually.${NC}"
-            return 1
+log_message() {
+    local level=$1
+    local message=$2
+    local color=$GREEN
+    
+    case $level in
+        "INFO") color=$GREEN ;;
+        "WARN") color=$YELLOW ;;
+        "ERROR") color=$RED ;;
+        "SUCCESS") color=$CYAN ;;
+    esac
+    
+    echo -e "[$(date +"%Y-%m-%d %H:%M:%S")] ${color}[$level]${NC} $message"
+}
+
+setup_target_dir() {
+    echo
+    read -p "Enter target domain (without http/https): " TARGET
+    
+    if [[ -z "$TARGET" ]]; then
+        log_message "ERROR" "Target domain cannot be empty."
+        setup_target_dir
+        return
+    fi
+    
+    TARGET_DIR="$(pwd)/recon_$TARGET"
+    mkdir -p "$TARGET_DIR"
+    mkdir -p "$TARGET_DIR/subdomains"
+    mkdir -p "$TARGET_DIR/endpoints"
+    mkdir -p "$TARGET_DIR/vulnerabilities"
+    mkdir -p "$TARGET_DIR/screenshots"
+    mkdir -p "$TARGET_DIR/reports"
+    
+    cd "$TARGET_DIR" || exit
+    echo "$TARGET" > target.txt
+    
+    log_message "SUCCESS" "Created target directory: $TARGET_DIR"
+    echo
+}
+
+install_system_packages() {
+    log_message "INFO" "Checking for required system packages..."
+    
+    packages=(lolcat jq golang-go python3-pip)
+    
+    for package in "${packages[@]}"; do
+        if ! dpkg -l | grep -q $package; then
+            log_message "INFO" "Installing $package..."
+            sudo apt-get update && sudo apt-get install -y $package
         fi
-    else
-        echo -e "${GREEN}[+] $tool_name is already installed.${NC}"
+    done
+    
+    if [[ ! "$PATH" == *"$HOME/go/bin"* ]]; then
+        echo 'export PATH=$PATH:$HOME/go/bin' >> ~/.bashrc
+        export PATH=$PATH:$HOME/go/bin
     fi
 }
 
 install_tools() {
-    if ! command -v go &> /dev/null; then
-        echo -e "${RED}[!] Go is not installed. Please install Go first.${NC}"
-        exit 1
+    log_message "INFO" "Checking and installing required tools..."
+    
+    declare -A tool_sources=(
+        ["subfinder"]="go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
+        ["httpx"]="go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest"
+        ["findomain"]="curl -LO https://github.com/Findomain/Findomain/releases/latest/download/findomain-linux && chmod +x findomain-linux && sudo mv findomain-linux /usr/local/bin/findomain"
+        ["waybackurls"]="go install -v github.com/tomnomnom/waybackurls@latest"
+        ["gf"]="go install -v github.com/tomnomnom/gf@latest"
+        ["sqlmap"]="pip3 install sqlmap"
+        ["gau"]="go install -v github.com/lc/gau/v2/cmd/gau@latest"
+        ["qsreplace"]="go install -v github.com/tomnomnom/qsreplace@latest"
+        ["dalfox"]="go install -v github.com/hahwul/dalfox/v2@latest"
+        ["anew"]="go install -v github.com/tomnomnom/anew@latest"
+        ["assetfinder"]="go install -v github.com/tomnomnom/assetfinder@latest"
+        ["page-fetch"]="go install -v github.com/detectify/page-fetch@latest"
+        ["gowitness"]="go install -v github.com/sensepost/gowitness@latest"
+        ["haktrails"]="go install -v github.com/hakluke/haktrails@latest"
+        ["tojson"]="go install -v github.com/tomnomnom/hacks/tojson@latest"
+        ["html-tool"]="go install -v github.com/tomnomnom/hacks/html-tool@latest"
+        ["jq"]="sudo apt-get install -y jq"
+    )
+    
+    for tool in "${!tool_sources[@]}"; do
+        if ! command -v "$tool" &> /dev/null; then
+            log_message "INFO" "Installing $tool..."
+            eval "${tool_sources[$tool]}" 2>/dev/null || log_message "ERROR" "Failed to install $tool"
+        else
+            log_message "INFO" "$tool is already installed."
+        fi
+    done
+    
+    if command -v gf &> /dev/null && [ ! -d "$HOME/.gf" ]; then
+        log_message "INFO" "Setting up GF patterns..."
+        mkdir -p "$HOME/.gf"
+        git clone https://github.com/1ndianl33t/Gf-Patterns ~/.gf/Gf-Patterns
+        cp ~/.gf/Gf-Patterns/*.json ~/.gf/
     fi
-    export PATH=$PATH:$(go env GOPATH)/bin
-    install_go_tool "dalfox" "github.com/hahwul/dalfox/v2"
-    install_go_tool "httpx" "github.com/projectdiscovery/httpx/cmd/httpx"
-    install_go_tool "subfinder" "github.com/projectdiscovery/subfinder/v2/cmd/subfinder"
-    install_go_tool "anew" "github.com/tomnomnom/anew"
-    install_go_tool "assetfinder" "github.com/tomnomnom/assetfinder"
-    install_go_tool "gau" "github.com/lc/gau/v2/cmd/gau"
-    install_go_tool "waybackurls" "github.com/tomnomnom/waybackurls"
-    install_go_tool "qsreplace" "github.com/tomnomnom/qsreplace"
-    install_go_tool "findomain" "github.com/Edu4rdSHL/findomain"
+    
+    log_message "SUCCESS" "Tool installation completed."
 }
 
-setup_target_dir() {
-    read -p "Enter target domaian (without http/https): " target
-    TARGET_DIR="$(pwd)/recon_$target"
-    mkdir -p "$TARGET_DIR"
-    cd "$TARGET_DIR" || exit
-    echo "$target" > target.txt
-    echo -e "${GREEN}[*] Created target directory: $TARGET_DIR${NC}"
+progress_monitor() {
+    local pid=$1
+    local message=$2
+    local start_time=$(date +%s)
+    
+    echo -ne "${YELLOW}$message... ${NC}"
+    
+    while kill -0 $pid 2>/dev/null; do
+        local elapsed=$(($(date +%s) - start_time))
+        local mins=$((elapsed / 60))
+        local secs=$((elapsed % 60))
+        echo -ne "\r${YELLOW}$message... (Elapsed: ${mins}m ${secs}s) ${NC}"
+        sleep 2
+    done
+    
+    local total_elapsed=$(($(date +%s) - start_time))
+    local total_mins=$((total_elapsed / 60))
+    local total_secs=$((total_elapsed % 60))
+    echo -e "\r${GREEN}$message... Completed (Took: ${total_mins}m ${total_secs}s) ${NC}"
 }
 
-xss_scan() {
-    echo -e "${GREEN}[*] Starting XSS Scan...${NC}"
+enumerate_subdomains() {
+    log_message "INFO" "Starting subdomain enumeration for $TARGET..."
     
-    timeout 60 subfinder -d "$(cat target.txt)" -silent > subdomains.txt
+    log_message "INFO" "Running subfinder..."
+    subfinder -d "$TARGET" -silent > "$TARGET_DIR/subdomains/subfinder_results.txt" &
+    subfinder_pid=$!
+    progress_monitor $subfinder_pid "Subfinder scanning"
     
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}[!] Subfinder failed or timed out.${NC}"
+    if command -v findomain &> /dev/null; then
+        log_message "INFO" "Running findomain..."
+        findomain -t "$TARGET" -q > "$TARGET_DIR/subdomains/findomain_results.txt" &
+        findomain_pid=$!
+        progress_monitor $findomain_pid "Findomain scanning"
+    fi
+    
+    log_message "INFO" "Running assetfinder..."
+    assetfinder --subs-only "$TARGET" > "$TARGET_DIR/subdomains/assetfinder_results.txt" &
+    assetfinder_pid=$!
+    progress_monitor $assetfinder_pid "Assetfinder scanning"
+
+    log_message "INFO" "Combining subdomain results..."
+    cat "$TARGET_DIR/subdomains/"*_results.txt | sort -u > "$TARGET_DIR/subdomains/all_subdomains.txt"
+    
+    local count=$(wc -l < "$TARGET_DIR/subdomains/all_subdomains.txt")
+    log_message "SUCCESS" "Found $count unique subdomains. Results saved to $TARGET_DIR/subdomains/all_subdomains.txt"
+}
+
+http_probe() {
+    log_message "INFO" "Probing for live HTTP/HTTPS services..."
+    
+    cat "$TARGET_DIR/subdomains/all_subdomains.txt" | httpx -silent -threads 100 -status-code -title -follow-redirects -timeout 15 -o "$TARGET_DIR/subdomains/live_subdomains.txt" &
+    httpx_pid=$!
+    progress_monitor $httpx_pid "HTTP probing with httpx"
+    
+    local count=$(wc -l < "$TARGET_DIR/subdomains/live_subdomains.txt")
+    log_message "SUCCESS" "Found $count live HTTP services. Results saved to $TARGET_DIR/subdomains/live_subdomains.txt"
+}
+
+fetch_urls() {
+    log_message "INFO" "Fetching URLs from various sources..."
+    
+    if [ ! -f "$TARGET_DIR/subdomains/live_subdomains.txt" ]; then
+        log_message "ERROR" "No live subdomains found. Run HTTP probing first."
         return 1
     fi
     
-    cat subdomains.txt | httpx -silent -threads 50 > live_hosts.txt
+    cut -d' ' -f1 "$TARGET_DIR/subdomains/live_subdomains.txt" > "$TARGET_DIR/subdomains/live_domains.txt"
     
-    cat live_hosts.txt | \
-    xargs -I@ -P 5 sh -c 'timeout 10 dalfox url "@" --silence 2>&1' | \
-    grep -v "^$" > xss_results.txt
+    log_message "INFO" "Running waybackurls..."
+    cat "$TARGET_DIR/subdomains/live_domains.txt" | waybackurls > "$TARGET_DIR/endpoints/wayback_urls.txt" &
+    wayback_pid=$!
+    progress_monitor $wayback_pid "Fetching from Wayback Machine"
     
-    xss_count=$(wc -l < xss_results.txt)
-    echo -e "${GREEN}[*] XSS Scan completed. Found $xss_count potential XSS vulnerabilities.${NC}"
-    echo -e "${GREEN}[*] Results saved in xss_results.txt${NC}"
-}
-
-sqli_scan() {
-    echo -e "${GREEN}[*] Starting SQLi Scan...${NC}"
-    echo "SQLi scan placeholder" > sqli_results.txt
-    echo -e "${GREEN}[*] SQLi Scan completed. Results in sqli_results.txt${NC}"
-}
-
-ssrf_scan() {
-    echo -e "${GREEN}[*] Starting SSRF Scan...${NC}"
-    echo "SSRF scan placeholder" > ssrf_results.txt
-    echo -e "${GREEN}[*] SSRF Scan completed. Results in ssrf_results.txt${NC}"
-}
-
-lfi_scan() {
-    echo -e "${GREEN}[*] Starting LFI Scan...${NC}"
-    echo "LFI scan placeholder" > lfi_results.txt
-    echo -e "${GREEN}[*] LFI Scan completed. Results in lfi_results.txt${NC}"
-}
-
-open_redirect_scan() {
-    echo -e "${GREEN}[*] Starting Open Redirect Scan...${NC}"
-    echo "Open Redirect scan placeholder" > redirect_results.txt
-    echo -e "${GREEN}[*] Open Redirect Scan completed. Results in redirect_results.txt${NC}"
-}
-
-cors_scan() {
-    echo -e "${GREEN}[*] Starting CORS Scan...${NC}"
-    echo "CORS scan placeholder" > cors_results.txt
-    echo -e "${GREEN}[*] CORS Scan completed. Results in cors_results.txt${NC}"
-}
-
-extract_js() {
-    echo -e "${GREEN}[*] Extracting JS Files...${NC}"
-    echo "JS extraction placeholder" > js_files.txt
-    echo -e "${GREEN}[*] JS Files extraction completed. Results in js_files.txt${NC}"
-}
-
-extract_comments_urls() {
-    echo -e "${GREEN}[*] Extracting URLs from Comments...${NC}"
-    echo "Comments URL extraction placeholder" > comments_urls.txt
-    echo -e "${GREEN}[*] URL Comments extraction completed. Results in comments_urls.txt${NC}"
-}
-
-find_live_hosts() {
-    echo -e "${GREEN}[*] Finding Live Hosts...${NC}"
-    subfinder -d "$(cat target.txt)" -silent |
-    httpx -silent > live_hosts.txt
-    echo -e "${GREEN}[*] Live Hosts discovery completed. Results in live_hosts.txt${NC}"
+    log_message "INFO" "Running gau..."
+    cat "$TARGET_DIR/subdomains/live_domains.txt" | gau --threads 5 > "$TARGET_DIR/endpoints/gau_urls.txt" &
+    gau_pid=$!
+    progress_monitor $gau_pid "Fetching URLs with gau"
+    
+    log_message "INFO" "Combining URL results..."
+    cat "$TARGET_DIR/endpoints/"*_urls.txt | sort -u > "$TARGET_DIR/endpoints/all_urls.txt"
+    
+    log_message "INFO" "Filtering URLs with parameters..."
+    grep "?" "$TARGET_DIR/endpoints/all_urls.txt" > "$TARGET_DIR/endpoints/parameterized_urls.txt"
+    
+    local all_count=$(wc -l < "$TARGET_DIR/endpoints/all_urls.txt")
+    local param_count=$(wc -l < "$TARGET_DIR/endpoints/parameterized_urls.txt")
+    log_message "SUCCESS" "Found $all_count unique URLs, including $param_count with parameters."
 }
 
 take_screenshots() {
-    echo -e "${GREEN}[*] Taking Screenshots...${NC}"
-    mkdir -p screenshots
-    echo "Screenshots placeholder" > screenshots/screenshot_list.txt
-    echo -e "${GREEN}[*] Screenshots completed. List in screenshots/screenshot_list.txt${NC}"
+    log_message "INFO" "Taking screenshots of live websites..."
+    
+    if [ ! -f "$TARGET_DIR/subdomains/live_domains.txt" ]; then
+        log_message "ERROR" "No live domains found. Run HTTP probing first."
+        return 1
+    fi
+    
+    gowitness file -f "$TARGET_DIR/subdomains/live_domains.txt" -P "$TARGET_DIR/screenshots" --no-http &
+    gowitness_pid=$!
+    progress_monitor $gowitness_pid "Taking screenshots with gowitness"
+    
+    log_message "SUCCESS" "Screenshots saved to $TARGET_DIR/screenshots directory."
 }
 
-run_all_scans() {
-    echo -e "${GREEN}[*] Starting ALL Scans...${NC}"
+scan_xss() {
+    log_message "INFO" "Starting XSS vulnerability scanning..."
     
-    echo -e "${YELLOW}[*] Scanning for Subdomains...${NC}"
-    find_live_hosts
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}[!] Subdomain scan failed.${NC}"
+    if [ ! -f "$TARGET_DIR/endpoints/parameterized_urls.txt" ]; then
+        log_message "ERROR" "No parameterized URLs found. Run URL fetching first."
+        return 1
     fi
     
-    echo -e "${YELLOW}[*] Performing XSS Scan...${NC}"
-    xss_scan
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}[!] XSS scan encountered issues.${NC}"
+    head -n 100 "$TARGET_DIR/endpoints/parameterized_urls.txt" > "$TARGET_DIR/endpoints/xss_targets.txt"
+    
+    log_message "INFO" "Running dalfox XSS scanner on sampled URLs..."
+    cat "$TARGET_DIR/endpoints/xss_targets.txt" | dalfox pipe -o "$TARGET_DIR/vulnerabilities/xss_results.txt" &
+    dalfox_pid=$!
+    progress_monitor $dalfox_pid "Scanning for XSS vulnerabilities"
+    
+    local vuln_count=$(grep -c "VULN" "$TARGET_DIR/vulnerabilities/xss_results.txt" || echo "0")
+    log_message "SUCCESS" "XSS scanning complete. Found approximately $vuln_count potential vulnerabilities."
+}
+
+scan_sqli() {
+    log_message "INFO" "Starting SQL Injection vulnerability scanning..."
+    
+    if [ ! -f "$TARGET_DIR/endpoints/parameterized_urls.txt" ]; then
+        log_message "ERROR" "No parameterized URLs found. Run URL fetching first."
+        return 1
     fi
     
-    echo -e "${YELLOW}[*] Performing SQLi Scan...${NC}"
-    sqli_scan
+    head -n 20 "$TARGET_DIR/endpoints/parameterized_urls.txt" > "$TARGET_DIR/endpoints/sqli_targets.txt"
     
-    echo -e "${YELLOW}[*] Performing SSRF Scan...${NC}"
-    ssrf_scan
+    mkdir -p "$TARGET_DIR/vulnerabilities/sqlmap_output"
     
-    echo -e "${YELLOW}[*] Performing LFI Scan...${NC}"
-    lfi_scan
+    log_message "INFO" "Running SQLMap on sampled URLs (this may take a while)..."
     
-    echo -e "${YELLOW}[*] Performing Open Redirect Scan...${NC}"
-    open_redirect_scan
+    while read -r url; do
+        local domain=$(echo "$url" | awk -F/ '{print $3}' | tr '.' '_')
+        log_message "INFO" "Testing $url for SQL injection..."
+        
+        sqlmap -u "$url" --batch --random-agent --level=1 --risk=1 --output-dir="$TARGET_DIR/vulnerabilities/sqlmap_output" --tamper=space2comment &
+        sqlmap_pid=$!
+        progress_monitor $sqlmap_pid "SQLMap scanning $domain"
+    done < "$TARGET_DIR/endpoints/sqli_targets.txt"
     
-    echo -e "${YELLOW}[*] Performing CORS Scan...${NC}"
-    cors_scan
+    log_message "SUCCESS" "SQL Injection scanning complete. Results in $TARGET_DIR/vulnerabilities/sqlmap_output/"
+}
+
+run_pattern_matching() {
+    log_message "INFO" "Running pattern matching with GF..."
     
-    echo -e "${YELLOW}[*] Extracting JS Files...${NC}"
-    extract_js
+    if [ ! -f "$TARGET_DIR/endpoints/all_urls.txt" ]; then
+        log_message "ERROR" "No URLs found. Run URL fetching first."
+        return 1
+    fi
     
-    echo -e "${YELLOW}[*] Extracting URLs from Comments...${NC}"
-    extract_comments_urls
+    mkdir -p "$TARGET_DIR/vulnerabilities/patterns"
     
-    echo -e "${YELLOW}[*] Taking Screenshots...${NC}"
-    take_screenshots
+    patterns=("xss" "ssrf" "redirect" "rce" "idor" "sqli" "lfi" "ssti")
     
-    echo -e "${GREEN}[*] ALL Scans Completed!${NC}"
+    for pattern in "${patterns[@]}"; do
+        log_message "INFO" "Searching for $pattern patterns..."
+        cat "$TARGET_DIR/endpoints/all_urls.txt" | gf "$pattern" > "$TARGET_DIR/vulnerabilities/patterns/${pattern}_endpoints.txt" 2>/dev/null
+        
+        local count=$(wc -l < "$TARGET_DIR/vulnerabilities/patterns/${pattern}_endpoints.txt" || echo "0")
+        log_message "INFO" "Found $count potential $pattern endpoints."
+    done
+    
+    log_message "SUCCESS" "Pattern matching complete. Results in $TARGET_DIR/vulnerabilities/patterns/"
+}
+
+generate_report() {
+    log_message "INFO" "Generating comprehensive report..."
+    
+    local report_file="$TARGET_DIR/reports/recon_report_$(date +%Y%m%d_%H%M%S).md"
+    
+    local end_time=$(date +%s)
+    local total_time=$((end_time - START_TIME))
+    local hours=$((total_time / 3600))
+    local minutes=$(( (total_time % 3600) / 60 ))
+    local seconds=$((total_time % 60))
+    
+    local subdomains_count=$(wc -l < "$TARGET_DIR/subdomains/all_subdomains.txt" 2>/dev/null || echo "0")
+    local live_subdomains_count=$(wc -l < "$TARGET_DIR/subdomains/live_subdomains.txt" 2>/dev/null || echo "0")
+    local urls_count=$(wc -l < "$TARGET_DIR/endpoints/all_urls.txt" 2>/dev/null || echo "0")
+    local param_urls_count=$(wc -l < "$TARGET_DIR/endpoints/parameterized_urls.txt" 2>/dev/null || echo "0")
+    
+    cat << EOL > "$report_file"
+# Reconnaissance Report for $TARGET
+**Date**: $(date '+%Y-%m-%d %H:%M:%S')
+**Target**: $TARGET
+**Total Execution Time**: ${hours}h ${minutes}m ${seconds}s
+
+## Summary
+- Total Subdomains Found: $subdomains_count
+- Live HTTP Services: $live_subdomains_count
+- Total URLs Discovered: $urls_count
+- URLs with Parameters: $param_urls_count
+
+## Subdomain Enumeration Results
+EOL
+
+    if [ -f "$TARGET_DIR/subdomains/live_subdomains.txt" ]; then
+        echo -e "\n### Top 10 Live Subdomains\n" >> "$report_file"
+        head -n 10 "$TARGET_DIR/subdomains/live_subdomains.txt" | while read -r line; do
+            echo "- \`$line\`" >> "$report_file"
+        done
+    fi
+    
+    echo -e "\n## Potential Vulnerabilities\n" >> "$report_file"
+    
+    if [ -f "$TARGET_DIR/vulnerabilities/xss_results.txt" ]; then
+        local xss_count=$(grep -c "VULN" "$TARGET_DIR/vulnerabilities/xss_results.txt" || echo "0")
+        echo "### XSS Vulnerabilities" >> "$report_file"
+        echo "- Total Potential XSS Issues: $xss_count" >> "$report_file"
+        
+        if [ "$xss_count" -gt 0 ]; then
+            echo -e "\n#### Sample XSS Vulnerable Endpoints\n" >> "$report_file"
+            grep "VULN" "$TARGET_DIR/vulnerabilities/xss_results.txt" | head -n 5 | while read -r line; do
+                echo "- \`$line\`" >> "$report_file"
+            done
+        fi
+    fi
+    
+    echo -e "\n### Pattern Matching Results\n" >> "$report_file"
+    
+    patterns=("xss" "ssrf" "redirect" "rce" "idor" "sqli" "lfi" "ssti")
+    
+    for pattern in "${patterns[@]}"; do
+        if [ -f "$TARGET_DIR/vulnerabilities/patterns/${pattern}_endpoints.txt" ]; then
+            local pattern_count=$(wc -l < "$TARGET_DIR/vulnerabilities/patterns/${pattern}_endpoints.txt" || echo "0")
+            echo "- $pattern (potential): $pattern_count endpoints" >> "$report_file"
+        fi
+    done
+    
+    echo -e "\n## Visual Reconnaissance\n" >> "$report_file"
+    local screenshot_count=$(find "$TARGET_DIR/screenshots" -type f -name "*.png" | wc -l || echo "0")
+    echo "- Total Screenshots Captured: $screenshot_count" >> "$report_file"
+    echo "- Screenshots are stored in the \`screenshots\` directory." >> "$report_file"
+    
+    cat << EOL >> "$report_file"
+
+## Next Steps
+1. Manually verify the potential vulnerabilities
+2. Explore the identified endpoints with parameters
+3. Review the pattern matching results for security issues
+4. Check the screenshots for any visual clues or sensitive information
+
+## Disclaimer
+This report was automatically generated by the Recon & Vulnerability Scanner script.
+The results should be manually verified before drawing conclusions.
+EOL
+    
+    log_message "SUCCESS" "Report generated: $report_file"
 }
 
 display_menu() {
-    echo -e "\n${PURPLE}Bug Bounty Recon Menu:${NC}"
-    echo "1. XSS Scan"
-    echo "2. SQLi Scan"
-    echo "3. SSRF Scan"
-    echo "4. LFI Scan"
-    echo "5. Open Redirect Scan"
-    echo "6. CORS Scan"
-    echo "7. Extract JS Files"
-    echo "8. Extract URLs from Comments"
-    echo "9. Find Live Hosts"
-    echo "10. Take Screenshots"
-    echo "11. Run ALL Scans"
-    echo "0. Exit"
+    echo
+    echo -e "${BLUE}=== RECONNAISSANCE MENU ===${NC}"
+    echo -e "${YELLOW}1.${NC} Setup Target"
+    echo -e "${YELLOW}2.${NC} Install Required Tools"
+    echo -e "${YELLOW}3.${NC} Enumerate Subdomains"
+    echo -e "${YELLOW}4.${NC} HTTP Probe (Find Live Services)"
+    echo -e "${YELLOW}5.${NC} Fetch URLs (Wayback + GAU)"
+    echo -e "${YELLOW}6.${NC} Take Screenshots of Live Websites"
+    echo -e "${YELLOW}7.${NC} Run XSS Vulnerability Scan"
+    echo -e "${YELLOW}8.${NC} Run SQL Injection Scan"
+    echo -e "${YELLOW}9.${NC} Run Pattern Matching (GF)"
+    echo -e "${YELLOW}10.${NC} Generate Report"
+    echo -e "${YELLOW}11.${NC} Run Full Reconnaissance (All Steps)"
+    echo -e "${YELLOW}0.${NC} Exit"
+    echo
+}
+
+run_full_recon() {
+    START_TIME=$(date +%s)
+    setup_target_dir
+    install_system_packages
+    install_tools
+    enumerate_subdomains
+    http_probe
+    fetch_urls
+    take_screenshots
+    run_pattern_matching
+    scan_xss
+    scan_sqli
+    generate_report
+    
+    log_message "SUCCESS" "Full reconnaissance completed!"
 }
 
 main() {
     clear
     display_title
-    install_tools
-    setup_target_dir
-
+    
+    install_system_packages
+    
+    if ! command -v lolcat &> /dev/null; then
+        log_message "WARN" "lolcat not installed. Using regular output."
+    fi
+    
     while true; do
         display_menu
         
-        read -p "Enter your choice: " choice
+        read -p "$(echo -e "${PURPLE}Enter your choice: ${NC}")" choice
         
         case $choice in
-            1) xss_scan ;;
-            2) sqli_scan ;;
-            3) ssrf_scan ;;
-            4) lfi_scan ;;
-            5) open_redirect_scan ;;
-            6) cors_scan ;;
-            7) extract_js ;;
-            8) extract_comments_urls ;;
-            9) find_live_hosts ;;
-            10) take_screenshots ;;
-            11) run_all_scans ;;
-            0) 
-                echo "Goodbye!"
-                exit 0 
+            1) setup_target_dir ;;
+            2) install_tools ;;
+            3) enumerate_subdomains ;;
+            4) http_probe ;;
+            5) fetch_urls ;;
+            6) take_screenshots ;;
+            7) scan_xss ;;
+            8) scan_sqli ;;
+            9) run_pattern_matching ;;
+            10) generate_report ;;
+            11) run_full_recon ;;
+            0)
+                log_message "INFO" "Exiting. Goodbye!"
+                exit 0
                 ;;
-            *) 
-                echo "Invalid option."
+            *)
+                log_message "ERROR" "Invalid option. Try again."
                 ;;
         esac
         
-        read -p "Press Enter to continue..." 
+        read -p "$(echo -e "${PURPLE}Press Enter to continue...${NC}")"
+        clear
+        display_title
     done
 }
 
