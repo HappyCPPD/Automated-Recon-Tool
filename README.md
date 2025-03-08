@@ -69,10 +69,10 @@ Basic terminal/command-line knowledge
 
 # **Installation Steps**
 
-Save the script to a file 
+Save the file to your directory
 Make the script executable:
 bash
-chmod +x recon.sh
+chmod +x blankrecon
 ./blankrecon
 
 # **Note**
