@@ -7,14 +7,14 @@ This is an automated reconnaissance script designed for cybersecurity profession
 # Subdomain Enumeration
 
 subfinder (passive subdomain discovery)
-findomain (certificate transparency logs)
-assetfinder (various subdomain sources)
+findomain (transparency logs)
+assetfinder (subdomain sources)
 
 
 # HTTP Probing & Web Crawling
 
 httpx (probe live subdomains)
-waybackurls (extract archived URLs)
+waybackurls (extract archived urls)
 gau (GetAllUrls from various sources)
 page-fetch (fetch full pages)
 
