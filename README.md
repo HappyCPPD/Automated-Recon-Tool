@@ -4,50 +4,39 @@ This is an automated reconnaissance script designed for cybersecurity profession
 
 # **Tools Used:**
 
-**Subfinder: Subdomain enumeration tool**
+# Subdomain Enumeration
 
-Discovers subdomains of a target domain
-Helps identify potential attack surfaces
-
-
-**Httpx: HTTP probe tool**
-
-Filters and probes live HTTP/HTTPS servers
+subfinder (passive subdomain discovery)
+findomain (certificate transparency logs)
+assetfinder (various subdomain sources)
 
 
-**Dalfox: XSS (Cross-Site Scripting) scanning tool**
+# HTTP Probing & Web Crawling
 
-Automated XSS vulnerability detection
-Checks for potential cross-site scripting vulnerabilities
-
-
-**Assetfinder: Subdomain enumeration tool**
-
-Finds related domains and subdomains
+httpx (probe live subdomains)
+waybackurls (extract archived URLs)
+gau (GetAllUrls from various sources)
+page-fetch (fetch full pages)
 
 
-**Gau: Fetches known URLs from various sources**
+# Vulnerability Scanning
 
-Retrieves URLs from web archives
-Helps in discovering potential endpoints
-
-
-**Waybackurls: Extracts urls from the wayback machine**
-
-Finds historical URLs of a domain
-Useful for finding legacy or forgotten endpoints
+dalfox (XSS scanner)
+sqlmap (SQL Injection scanner)
+qsreplace (replace parameters in URLs)
 
 
-**Qsreplace: Query string replacement tool**
+# Post-Processing & Data Handling
 
-Helps in payload generation and parameter fuzzing
-Useful for various injection tests
+gf (grep patterns for vulnerabilities)
+anew (add lines to files if they don't exist)
+tojson (convert output to JSON)
+html-tool (HTML analysis)
 
 
-**Findomain: Advanced subdomain enumeration tool**
+# Reporting & Visualization
 
-Discovers subdomains using multiple sources
-More comprehensive than standard tools
+gowitness (website screenshots)
 
 # **Steps**
 
