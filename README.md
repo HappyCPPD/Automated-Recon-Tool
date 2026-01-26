@@ -277,4 +277,6 @@ For issues, check:
 ---
 
 **Last Updated**: 2026-01-26  
-**Version**: 2.0 (Refactored & Production-Ready)
+**Version**: 2.0
+
+I DO NOT ENDORSE USING THIS TOOL FOR MALICIOUS PURPOSES!
