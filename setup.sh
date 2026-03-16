@@ -1,14 +1,10 @@
 #!/bin/bash
 
-# XSS Recon - Installation & Quick Start Script
-# This script prepares your environment for running BlankRecon.sh
-
 echo "======================================"
 echo "XSS Recon - Setup Wizard"
 echo "======================================"
 echo ""
 
-# Check if running on Linux/WSL
 if [[ ! "$OSTYPE" == "linux-gnu"* ]] && [[ ! "$OSTYPE" == "linux"* ]]; then
     echo "⚠️  This script is designed for Linux/Kali Linux/WSL"
     echo "Current OS: $OSTYPE"
@@ -29,14 +25,14 @@ if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
     echo "Install with: sudo apt-get install ${MISSING_DEPS[*]}"
     exit 1
 else
-    echo "✅ All basic dependencies installed"
+    echo "All basic dependencies installed"
 fi
 
 echo ""
 echo "[2/5] Checking Go installation..."
 if command -v go &> /dev/null; then
     GO_VERSION=$(go version | awk '{print $3}')
-    echo "✅ Go $GO_VERSION found"
+    echo "Go $GO_VERSION found"
 else
     echo "❌ Go not installed"
     echo "Install from: https://go.dev/dl/"
@@ -48,7 +44,7 @@ echo ""
 echo "[3/5] Checking Python installation..."
 if command -v python3 &> /dev/null; then
     PY_VERSION=$(python3 --version | awk '{print $2}')
-    echo "✅ Python $PY_VERSION found"
+    echo "Python $PY_VERSION found"
 else
     echo "❌ Python 3 not installed"
     echo "Install with: sudo apt-get install python3 python3-pip"
